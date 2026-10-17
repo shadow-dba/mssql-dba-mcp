@@ -1,0 +1,62 @@
+{
+  "name": "@shadow-dba/mssql-dba-mcp",
+  "version": "0.1.0",
+  "description": "Read-only SQL Server DBA tools for AI agents (MCP server). AI can never modify your database.",
+  "mcpName": "io.github.shadow-dba/mssql-dba-mcp",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "sql-server",
+    "mssql",
+    "dba",
+    "database",
+    "read-only",
+    "claude",
+    "ai"
+  ],
+  "homepage": "https://github.com/shadow-dba/mssql-dba-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/shadow-dba/mssql-dba-mcp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shadow-dba/mssql-dba-mcp.git"
+  },
+  "license": "MIT",
+  "author": "shadow-dba",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "mssql-dba-mcp": "./build/index.js"
+  },
+  "files": [
+    "build",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "build": "node -e \"require('fs').rmSync('build',{recursive:true,force:true})\" && tsc && node -e \"require('fs').chmodSync('build/index.js',0o755)\"",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "smoke": "node scripts/smoke-test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "mssql": "^12.7.9",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

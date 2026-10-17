@@ -1,0 +1,40 @@
+name: Bug report
+description: A tool fails, returns wrong data, or the server does not start.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Found a way to make the server write to the database?** Do not open an issue.
+        Report it privately: see SECURITY.md.
+  - type: input
+    id: tool
+    attributes:
+      label: Tool
+      description: Which tool, for example mssql_wait_stats. Leave empty if the server does not start.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The error or wrong output, and what you expected. Remove passwords, host names and data.
+    validations:
+      required: true
+  - type: input
+    id: sqlserver
+    attributes:
+      label: SQL Server version and edition
+      description: From mssql_server_version, for example "SQL Server 2022 CU15, Developer" or "Azure SQL Database".
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: mssql-dba-mcp, Node.js and MCP client versions
+      description: For example "0.1.0, Node 22.11, Claude Code 2.1".
+  - type: dropdown
+    id: login
+    attributes:
+      label: Login
+      options:
+        - The read-only login from the README scripts
+        - A login with other permissions

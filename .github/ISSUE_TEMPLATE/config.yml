@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question
+    url: https://github.com/shadow-dba/mssql-dba-mcp/discussions
+    about: Ask and answer questions in Discussions.
+  - name: Security problem
+    url: https://github.com/shadow-dba/mssql-dba-mcp/security/advisories/new
+    about: Report a way around the read-only promise privately.
