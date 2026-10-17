@@ -1,0 +1,29 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.shadow-dba/mssql-dba-mcp",
+  "title": "SQL Server DBA (read-only)",
+  "description": "Read-only SQL Server DBA tools: health checks, waits, slow queries, indexes, backups.",
+  "repository": {
+    "url": "https://github.com/shadow-dba/mssql-dba-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/shadow-dba/mssql-dba-mcp#readme",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@shadow-dba/mssql-dba-mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        { "name": "DB_AUTH_TYPE", "description": "sql or windows (NTLM)", "isRequired": true, "default": "sql" },
+        { "name": "DB_HOST", "description": "SQL Server host name or IP", "isRequired": true },
+        { "name": "DB_NAME", "description": "Database to connect to, for example master", "isRequired": true },
+        { "name": "DB_USER", "description": "Read-only login (see README, Permissions)", "isRequired": true },
+        { "name": "DB_PASSWORD", "description": "Password of the login", "isRequired": true, "isSecret": true },
+        { "name": "DB_PORT", "description": "Server port", "default": "1433" },
+        { "name": "TRUST_SERVER_CERTIFICATE", "description": "true accepts a self-signed certificate", "default": "false" }
+      ]
+    }
+  ]
+}

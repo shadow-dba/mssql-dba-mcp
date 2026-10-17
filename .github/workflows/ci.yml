@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Package holds only build, README and LICENSE
+        run: |
+          npm pack --dry-run --json > pack.json
+          node -e "
+            const files = require('./pack.json')[0].files.map(f => f.path);
+            const bad = files.filter(p => !/^(build\/|README\.md$|LICENSE$|package\.json$)/.test(p));
+            if (bad.length) { console.error('Unexpected files in package:', bad); process.exit(1); }
+            console.log(files.length + ' files OK');
+          "
+
+  # Calls all tools against a real SQL Server 2022 with the README read-only login,
+  # then checks that the review's bypass payloads are rejected and change nothing.
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Throwaway passwords for a container that lives only for this job.
+      SA_PASSWORD: Smoke-Test-Sa-1!
+      SMOKE_LOGIN_PASSWORD: Smoke-Test-Login-1!
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: Smoke-Test-Sa-1!
+          MSSQL_AGENT_ENABLED: 'true'
+        ports:
+          - 1433:1433
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Create the StackOverflow fixture and the README login
+        run: node scripts/setup-smoke-db.mjs
+      - name: Write .env for the read-only login
+        run: |
+          cat > .env <<ENV
+          DB_AUTH_TYPE=sql
+          DB_HOST=localhost
+          DB_PORT=1433
+          DB_NAME=StackOverflow
+          DB_USER=shadow-dba
+          DB_PASSWORD=$SMOKE_LOGIN_PASSWORD
+          TRUST_SERVER_CERTIFICATE=true
+          ENV
+      - run: npm run smoke

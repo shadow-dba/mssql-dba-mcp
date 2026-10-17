@@ -1,0 +1,16 @@
+name: Feature request
+description: A new check, a new tool, or a change to an existing one.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What DBA task should this help with?
+      description: For example "find statistics that were not updated for 30 days".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: Which DMVs or system views it would read, and the permission it needs. Tools must stay read-only and work with the README login.
