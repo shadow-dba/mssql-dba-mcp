@@ -227,6 +227,22 @@ Lifting these would need permissions that are not read-only, so the scripts do n
 
 Values come from the MCP client's `env` block, or from `./.env` in the server's working directory. The client's values win.
 
+## Use as a library
+
+The tools can run inside another Node program that already has a connection (the shadow-dba app embeds them in its AI diagnoses):
+
+```ts
+import { Db, checkLogin, createTools } from '@shadow-dba/mssql-dba-mcp';
+
+const db = new Db({ server, port, user, password, database: 'master', options: { encrypt: true } }, (conn) => checkLogin(conn));
+for (const tool of createTools(db)) {
+  // tool.name, tool.description, tool.inputSchema (zod shape), await tool.handler(args) -> Markdown
+}
+await db.disconnect();
+```
+
+The login check and every cap work the same as in the server; nothing starts on import.
+
 ## Development
 
 ```bash

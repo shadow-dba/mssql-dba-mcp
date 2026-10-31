@@ -5,6 +5,13 @@ and the project uses [semantic versioning](https://semver.org/) (0.x: tool names
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-31
+
+### Added
+- Library entry point (`import { Db, checkLogin, createTools } from '@shadow-dba/mssql-dba-mcp'`):
+  the same tools for a program that has its own connection, with type declarations. The stdio
+  server (`bin`) is unchanged; importing the package starts nothing.
+
 ## [0.1.0] - 2026-10-17
 
 First public release.
