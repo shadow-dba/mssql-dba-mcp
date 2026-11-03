@@ -1,6 +1,6 @@
 {
   "name": "@shadow-dba/mssql-dba-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Read-only SQL Server DBA tools for AI agents (MCP server). AI can never modify your database.",
   "mcpName": "io.github.shadow-dba/mssql-dba-mcp",
   "keywords": [

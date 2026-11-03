@@ -136,29 +136,39 @@ Every tool is read-only. Output is Markdown, capped at 200 rows per table and 40
 
 ## Permissions
 
-Run **one** of these scripts as a sysadmin. Each creates the login and grants what the tools need. Permissions are server-wide: database tools can look at any database, including ones created later.
+Run **one** of these scripts as a sysadmin. Each creates the login and grants what the tools need. Permissions are server-wide: database tools can look at any database, including ones created later. The scripts can run again: an existing login or user is kept (with its password) and only the grants are applied.
 
 ### SQL Server login (`DB_AUTH_TYPE=sql`)
 
 ```sql
 USE [master];
 GO
-CREATE LOGIN [shadow-dba] WITH PASSWORD = 'YourStrongPasswordHere';
+IF SUSER_ID(N'shadow-dba') IS NULL
+  CREATE LOGIN [shadow-dba] WITH PASSWORD = 'YourStrongPasswordHere';
 GO
 GRANT VIEW SERVER STATE    TO [shadow-dba];
 GRANT VIEW ANY DEFINITION  TO [shadow-dba];
 GRANT CONNECT ANY DATABASE TO [shadow-dba];
--- Error log access: this permission exists only on SQL Server 2022+ and Managed Instance.
+-- Error log access. SQL Server 2022+ and Managed Instance have a permission for it;
+-- 2016-2019 need EXECUTE on the procedure that reads the log (it only reads).
 IF CAST(SERVERPROPERTY('ProductMajorVersion') AS INT) >= 16
    OR SERVERPROPERTY('EngineEdition') = 8
   EXEC (N'GRANT VIEW ANY ERROR LOG TO [shadow-dba];');
+ELSE
+BEGIN
+  IF USER_ID(N'shadow-dba') IS NULL
+    EXEC (N'CREATE USER [shadow-dba] FOR LOGIN [shadow-dba];');
+  EXEC (N'GRANT EXECUTE ON xp_readerrorlog TO [shadow-dba];');
+END;
 GO
 
 -- msdb: SELECT on exactly the tables the tools read. No Agent roles: SQLAgentReaderRole
 -- can create and change jobs, and sysjobsteps (not granted) can hold passwords.
 USE [msdb];
 GO
-CREATE USER [shadow-dba] FOR LOGIN [shadow-dba];
+IF USER_ID(N'shadow-dba') IS NULL
+  CREATE USER [shadow-dba] FOR LOGIN [shadow-dba];
+GO
 GRANT SELECT ON dbo.backupset         TO [shadow-dba];
 GRANT SELECT ON dbo.backupmediafamily TO [shadow-dba];
 GRANT SELECT ON dbo.suspect_pages     TO [shadow-dba];
@@ -168,6 +178,7 @@ GRANT SELECT ON dbo.sysjobschedules   TO [shadow-dba];
 GRANT SELECT ON dbo.sysschedules      TO [shadow-dba];
 GRANT SELECT ON dbo.sysalerts         TO [shadow-dba];
 GRANT SELECT ON dbo.sysoperators      TO [shadow-dba];
+GRANT EXECUTE ON dbo.agent_datetime   TO [shadow-dba];
 GO
 ```
 
@@ -182,7 +193,8 @@ Same script with `CREATE LOGIN [DOMAIN\shadow-dba] FROM WINDOWS;` instead of the
 There are no server permissions and no msdb. Run this in the database you set as `DB_NAME` (a contained user, so use `DB_AUTH_TYPE=sql`):
 
 ```sql
-CREATE USER [shadow-dba] WITH PASSWORD = 'YourStrongPasswordHere';
+IF USER_ID(N'shadow-dba') IS NULL
+  CREATE USER [shadow-dba] WITH PASSWORD = 'YourStrongPasswordHere';
 GRANT VIEW DATABASE STATE TO [shadow-dba];
 GRANT VIEW DEFINITION     TO [shadow-dba];
 ```
@@ -195,7 +207,9 @@ GRANT VIEW DEFINITION     TO [shadow-dba];
 | `VIEW ANY DEFINITION` | Schema and index metadata in every database; the full member list for `mssql_privileged_logins`. |
 | `CONNECT ANY DATABASE` | Enter every database (current and future) without a user in each one. |
 | `VIEW ANY ERROR LOG` | `mssql_error_log` (SQL Server 2022+ and Managed Instance). |
+| `EXECUTE` on `xp_readerrorlog` (master) | `mssql_error_log` on SQL Server 2016-2019. The procedure only reads the log files. |
 | msdb `SELECT` on 9 tables | Backups and suspect pages (`backupset`, `backupmediafamily`, `suspect_pages`), Agent jobs (`sysjobs`, `sysjobhistory`, `sysjobschedules`, `sysschedules`), alerts (`sysalerts`, `sysoperators`). |
+| msdb `EXECUTE` on `agent_datetime` | Converts Agent run dates and times. A plain function that reads nothing; the same login works for the [shadow-dba agent](https://github.com/shadow-dba/shadow-dba-agent). |
 
 None of these can change data, schema or settings.
 
@@ -203,10 +217,21 @@ None of these can change data, schema or settings.
 
 Lifting these would need permissions that are not read-only, so the scripts do not grant them.
 
-- **`mssql_error_log` on SQL Server 2016-2019** needs the `securityadmin` role, which can create logins and grant permissions. Without it the tool says "not allowed"; nothing else is affected.
 - **`mssql_checkdb_status` on builds older than SQL Server 2016 SP2 / 2017 CU9** can only read the date from the database header (`DBCC DBINFO`, needs `sysadmin` or `db_owner`). Those databases show `UNKNOWN`.
-- **`mssql_run_select` cannot read rows from your tables.** System views and DMVs are enough for DBA work, and this keeps business data away from the AI. To allow it anyway: `GRANT SELECT ALL USER SECURABLES TO [shadow-dba];` in master.
+- **`mssql_run_select` cannot read rows from your tables.** System views and DMVs are enough for DBA work, and this keeps business data away from the AI. To allow it anyway, see the optional grants below.
 - **Azure SQL Database** sees only the database in `DB_NAME`. Instance tools (Agent, backups, error log, CHECKDB, logins) say they are not available there.
+
+### Optional grants (business data)
+
+Not part of the setup script. Each one is still read-only, but it lets the AI see data from your tables, not only metadata. Grant it for one task and revoke it after.
+
+| Grant | What it allows |
+|---|---|
+| `GRANT SELECT ALL USER SECURABLES TO [shadow-dba];` (master, SQL Server 2014+) | `mssql_run_select` can read rows from every user table and view in every database. System tables and CDC change tables are not included. |
+| `GRANT VIEW SERVER SECURITY AUDIT TO [shadow-dba];` (master, SQL Server 2022+ / Managed Instance) | Read SQL Server Audit files with `sys.fn_get_audit_file` and the audit specifications. On 2016-2019 this needs `CONTROL SERVER`, which is not read-only: do not grant it. |
+| In one database: `CREATE USER [shadow-dba] FOR LOGIN [shadow-dba]; GRANT SELECT ON SCHEMA::cdc TO [shadow-dba];` | Read Change Data Capture tables in that database (who changed which rows, and when). |
+
+Revoke with the same statement and `REVOKE` instead of `GRANT`.
 
 ## Configuration
 

@@ -15,7 +15,7 @@ export function errorLogTool(db: Db): ToolDescriptor {
       'Error log: read the SQL Server ERRORLOG (or SQL Server Agent log) via sp_readerrorlog. ' +
       'Optionally filter to lines containing one or two search strings (e.g. "Backup", "3013") and ' +
       'select an archived log file. Returns newest entries first. ' +
-      'Needs VIEW ANY ERROR LOG (SQL Server 2022+ / Managed Instance) or securityadmin. ' +
+      'Needs VIEW ANY ERROR LOG (SQL Server 2022+ / Managed Instance) or EXECUTE on xp_readerrorlog (2016-2019). ' +
       'Not available on Azure SQL Database.',
     inputSchema: {
       logNumber: z
@@ -114,7 +114,7 @@ DROP TABLE #errlog;`;
           return (
             'This login is not allowed to read the error log. ' +
             'On SQL Server 2022+ / Managed Instance run: GRANT VIEW ANY ERROR LOG TO [<login>]; (in master). ' +
-            'On SQL Server 2016-2019 it needs the securityadmin server role, which is not read-only and is not recommended.'
+            'On SQL Server 2016-2019 run in master: CREATE USER [<login>] FOR LOGIN [<login>]; GRANT EXECUTE ON xp_readerrorlog TO [<login>]; (it only reads the log).'
           );
         }
         throw err;

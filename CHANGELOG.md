@@ -5,6 +5,16 @@ and the project uses [semantic versioning](https://semver.org/) (0.x: tool names
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-03
+
+### Changed
+- Setup script: on SQL Server 2016-2019 it grants `EXECUTE` on `xp_readerrorlog` (master) so
+  `mssql_error_log` works without `securityadmin`. The tool's permission hint says the same.
+- Setup script: can run again over an existing login or user (`IF SUSER_ID(...) IS NULL`), and
+  grants `EXECUTE` on `msdb.dbo.agent_datetime` so one login serves the MCP and the agent.
+- README: new "Optional grants" section (`SELECT ALL USER SECURABLES`, `VIEW SERVER SECURITY AUDIT`,
+  per-database `SELECT` on the `cdc` schema) for investigations that need business data.
+
 ## [0.1.0] - 2026-10-17
 
 First public release.
