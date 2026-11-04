@@ -233,6 +233,26 @@ Not part of the setup script. Each one is still read-only, but it lets the AI se
 
 Revoke with the same statement and `REVOKE` instead of `GRANT`.
 
+#### Setup script with business data
+
+If the AI should read table rows all the time (for example to check data with `sys.dm_db_stats_properties` or to look at the rows behind a slow query), add these two blocks to the setup script above. One server-level grant is enough on every supported version (SQL Server 2014+ and Managed Instance), and it also covers databases created later.
+
+In the `master` part, after the error log block:
+
+```sql
+-- Read rows in every user table and view, in every database (also future ones).
+GRANT SELECT ALL USER SECURABLES TO [shadow-dba];
+```
+
+At the end of the `msdb` part:
+
+```sql
+-- SELECT ALL USER SECURABLES also reaches msdb; keep job step commands (can hold passwords) hidden.
+DENY SELECT ON dbo.sysjobsteps TO [shadow-dba];
+```
+
+The login still cannot change anything: `DBCC`, `INSERT`, `UPDATE` and the rest stay blocked by the permissions and by `mssql_run_select`.
+
 ## Configuration
 
 | Variable | Default | Description |

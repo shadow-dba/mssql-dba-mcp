@@ -5,6 +5,10 @@ and the project uses [semantic versioning](https://semver.org/) (0.x: tool names
 
 ## [Unreleased]
 
+### Changed
+- README: "Optional grants" now has a ready-to-paste "Setup script with business data" block
+  (`SELECT ALL USER SECURABLES` in master, `DENY SELECT` on `msdb.dbo.sysjobsteps`).
+
 ## [0.1.1] - 2026-11-03
 
 ### Changed
