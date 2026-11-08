@@ -5,6 +5,12 @@ and the project uses [semantic versioning](https://semver.org/) (0.x: tool names
 
 ## [Unreleased]
 
+### Changed
+- Setup script grants `SELECT ALL USER SECURABLES` (`db_datareader` on Azure SQL Database) by
+  default, so `mssql_run_select` can read rows from user tables, and denies `SELECT` on
+  `msdb.dbo.sysjobsteps` (job step commands can hold passwords). README: new "Business data"
+  section explains what the AI can now see and how to revoke it for a metadata-only login.
+
 ## [0.1.1] - 2026-11-03
 
 ### Changed
