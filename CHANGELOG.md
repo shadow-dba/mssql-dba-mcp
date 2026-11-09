@@ -6,10 +6,14 @@ and the project uses [semantic versioning](https://semver.org/) (0.x: tool names
 ## [Unreleased]
 
 ### Changed
-- Setup script grants `SELECT ALL USER SECURABLES` (`db_datareader` on Azure SQL Database) by
-  default, so `mssql_run_select` can read rows from user tables, and denies `SELECT` on
-  `msdb.dbo.sysjobsteps` (job step commands can hold passwords). README: new "Business data"
-  section explains what the AI can now see and how to revoke it for a metadata-only login.
+- Setup script no longer grants any access to rows in user tables: `SELECT ALL USER SECURABLES`
+  (`db_datareader` on Azure SQL Database) is removed from the default scripts. The login is
+  metadata-only again; `mssql_run_select` reads system views and DMVs. The `DENY SELECT` on
+  `msdb.dbo.sysjobsteps` stays as defense in depth.
+- README: the "Business data" section is now an optional, opt-in guide. It explains what
+  leaves SQL Server when the AI can read rows, the privacy, security and legal checks to make
+  first (data processing agreements, GDPR/HIPAA/PCI DSS, prompt injection), and how to grant
+  the smallest possible access for one task and revoke it after.
 
 ## [0.1.1] - 2026-11-03
 

@@ -60,13 +60,13 @@ Want ready-made DBA skills (health check, plan analysis, index review) on top of
 
 ## Safety: read-only in three layers
 
-1. **A read-only login, checked at startup.** The [setup script](#permissions) grants `VIEW` permissions, `SELECT` on user tables and views, and `SELECT` on a few msdb tables; nothing that can write. At startup the server checks the login and **refuses to run** if it is a member of `sysadmin`, has `CONTROL SERVER`, or is `db_owner` in `DB_NAME`. This is the real guarantee: SQL Server itself blocks every change, whatever the AI sends.
+1. **A read-only login, checked at startup.** The [setup script](#permissions) grants only `VIEW` permissions and `SELECT` on a few msdb tables; nothing that can write, and nothing that reads rows from your own tables. At startup the server checks the login and **refuses to run** if it is a member of `sysadmin`, has `CONTROL SERVER`, or is `db_owner` in `DB_NAME`. This is the real guarantee: SQL Server itself blocks every change, whatever the AI sends.
 2. **Tools that only read.** 41 of the 42 tools run fixed SQL written in this repo. They read system views and DMVs. They never run DBCC CHECKDB, never run the query behind a plan, and never change a setting.
 3. **A strict check on the AI's own SQL.** `mssql_run_select` runs a query the AI writes. A lexer checks it first: exactly one statement, it must start with `SELECT` or `WITH`, and any word that writes, runs code or changes the session (`INSERT`, `UPDATE`, `EXEC`, `SET`, `USE`, `SELECT INTO`, `DBCC`, `BACKUP`, ...) rejects it. Strings, quoted names and comments cannot hide code. This matters because tool output contains text other people control (query text from the plan cache, error-log lines, object names), and a prompt injection in that text could ask the AI to send a crafted query.
 
 Layer 3 is a second line of defense, not the guarantee. If you run with a privileged login (`MSSQL_ALLOW_PRIVILEGED_LOGIN=true`), a bypass of layer 3 could change your data. Found a bypass? See [SECURITY.md](SECURITY.md).
 
-What the AI **can** see: metadata (names of databases, tables, columns, indexes, logins, jobs), server settings, query text in the plan cache and running requests (it can contain literal values), error-log lines and Agent job messages, and rows from your own tables (the setup script grants `SELECT ALL USER SECURABLES`, see [Business data](#business-data)). It cannot see job step commands in msdb, which can hold passwords.
+What the AI **can** see: metadata (names of databases, tables, columns, indexes, logins, jobs), server settings, query text in the plan cache and running requests (it can contain literal values), error-log lines and Agent job messages. By default it **cannot** read rows from your own tables, and it cannot see job step commands in msdb, which can hold passwords. Giving it table data is a separate decision with real consequences: see [Business data](#business-data-optional-read-before-you-grant).
 
 ## Tools
 
@@ -161,14 +161,9 @@ BEGIN
   EXEC (N'GRANT EXECUTE ON xp_readerrorlog TO [shadow-dba];');
 END;
 GO
--- Business data: read rows in every user table and view, in every database (also future
--- ones). Lets the AI check the data behind a slow query or a statistics problem. Remove
--- this line for a metadata-only login (see "Business data" below).
-GRANT SELECT ALL USER SECURABLES TO [shadow-dba];
-GO
 
 -- msdb: SELECT on exactly the tables the tools read. No Agent roles: SQLAgentReaderRole
--- can create and change jobs, and sysjobsteps (denied below) can hold passwords.
+-- can create and change jobs.
 USE [msdb];
 GO
 IF USER_ID(N'shadow-dba') IS NULL
@@ -184,7 +179,8 @@ GRANT SELECT ON dbo.sysschedules      TO [shadow-dba];
 GRANT SELECT ON dbo.sysalerts         TO [shadow-dba];
 GRANT SELECT ON dbo.sysoperators      TO [shadow-dba];
 GRANT EXECUTE ON dbo.agent_datetime   TO [shadow-dba];
--- SELECT ALL USER SECURABLES also reaches msdb; keep job step commands (can hold passwords) hidden.
+-- Job step commands can hold passwords. Not granted; the DENY keeps them hidden even if
+-- someone later adds a wider grant such as SELECT ALL USER SECURABLES.
 DENY SELECT ON dbo.sysjobsteps        TO [shadow-dba];
 GO
 ```
@@ -204,8 +200,6 @@ IF USER_ID(N'shadow-dba') IS NULL
   CREATE USER [shadow-dba] WITH PASSWORD = 'YourStrongPasswordHere';
 GRANT VIEW DATABASE STATE TO [shadow-dba];
 GRANT VIEW DEFINITION     TO [shadow-dba];
--- Business data: read rows in every table and view of this database. Remove for a metadata-only user.
-ALTER ROLE db_datareader ADD MEMBER [shadow-dba];
 ```
 
 ### What each permission is for
@@ -217,41 +211,73 @@ ALTER ROLE db_datareader ADD MEMBER [shadow-dba];
 | `CONNECT ANY DATABASE` | Enter every database (current and future) without a user in each one. |
 | `VIEW ANY ERROR LOG` | `mssql_error_log` (SQL Server 2022+ and Managed Instance). |
 | `EXECUTE` on `xp_readerrorlog` (master) | `mssql_error_log` on SQL Server 2016-2019. The procedure only reads the log files. |
-| `SELECT ALL USER SECURABLES` | `mssql_run_select` can read rows from every user table and view in every database (SQL Server 2014+ and Managed Instance; `db_datareader` on Azure SQL Database). See [Business data](#business-data). |
-| msdb `DENY SELECT` on `sysjobsteps` | Hides Agent job step commands, which can hold passwords, from the grant above. |
+| msdb `DENY SELECT` on `sysjobsteps` | Hides Agent job step commands, which can hold passwords, even if a wider grant is added later. |
 | msdb `SELECT` on 9 tables | Backups and suspect pages (`backupset`, `backupmediafamily`, `suspect_pages`), Agent jobs (`sysjobs`, `sysjobhistory`, `sysjobschedules`, `sysschedules`), alerts (`sysalerts`, `sysoperators`). |
 | msdb `EXECUTE` on `agent_datetime` | Converts Agent run dates and times. A plain function that reads nothing; the same login works for the [shadow-dba agent](https://github.com/shadow-dba/shadow-dba-agent). |
 
-None of these can change data, schema or settings.
+None of these can change data, schema or settings, and none of them reads rows from your own tables.
 
 ### Limits (on purpose)
 
-Lifting these would need permissions that are not read-only, so the scripts do not grant them.
+Lifting these would need permissions that are not read-only, or that expose your data, so the scripts do not grant them.
 
 - **`mssql_checkdb_status` on builds older than SQL Server 2016 SP2 / 2017 CU9** can only read the date from the database header (`DBCC DBINFO`, needs `sysadmin` or `db_owner`). Those databases show `UNKNOWN`.
+- **`mssql_run_select` cannot read rows from your tables.** System views and DMVs are enough for most DBA work, and this keeps business data away from the AI. To allow it for a specific task, read [Business data](#business-data-optional-read-before-you-grant) first.
 - **Azure SQL Database** sees only the database in `DB_NAME`. Instance tools (Agent, backups, error log, CHECKDB, logins) say they are not available there.
 
-### Business data
+### Business data (optional, read before you grant)
 
-The setup script grants `SELECT ALL USER SECURABLES` (`db_datareader` on Azure SQL Database), so `mssql_run_select` can read rows from your tables, not only metadata. This is on purpose: a DBA looks at the data behind a slow query, checks a skewed column with `sys.dm_db_stats_properties`, or counts rows that match a filter, and the AI needs the same to give good advice. It is still read-only; the login cannot change a row.
+The setup script does **not** let the AI read rows from your tables. `mssql_run_select` can query system views and DMVs, which is enough for most DBA work. Sometimes a DBA needs the data itself: the values behind a slow query, a skewed column, a count of rows that match a filter. You can grant that, but it is a decision about your data, not about this tool, and it is not reversible for data the AI has already seen.
 
-What it means for you: the AI, and the MCP client it runs in, can see business data. Rows go to the model like any other tool output. If that is not acceptable, remove the grant and the AI falls back to metadata only (every other tool keeps working):
+**What happens when you grant it**
+
+- Every row the AI selects leaves SQL Server and goes to the model as tool output. Depending on your MCP client and AI provider, it may be sent to a third party, stored in chat history and logs, and kept under that provider's retention terms. Check those terms before you grant anything.
+- The AI chooses which tables to query. Tool output contains text other people control (query text, object names, error-log lines). A prompt injection in that text can ask the AI to read and repeat sensitive rows. The read-only guarantee stops changes; it does not stop reading.
+- Tables often hold more than you remember: personal data, health and payment data, credentials, API keys, salaries, legal documents. A server-wide grant covers all of them, in every database, including databases created later.
+
+**Privacy and legal.** Personal data in your tables is regulated (GDPR, UK GDPR, CCPA/CPRA, HIPAA, PCI DSS, and local laws). Sending it to an AI provider is a disclosure to a processor: you may need a data processing agreement with that provider, a lawful basis, an updated record of processing, a data protection impact assessment, and the approval of your data protection officer or legal team. Customer and vendor contracts can forbid it outright. If you cannot say who can see the data after it leaves SQL Server, do not grant this. You are responsible for that check; this project cannot make it for you.
+
+**If you decide to grant it**
+
+1. Prefer the smallest grant: one table or schema, in one database, over a server-wide grant.
+2. Prefer a masked or anonymised copy, a non-production environment, or a view that hides sensitive columns. Dynamic Data Masking and Row-Level Security still apply to this login (it has no `UNMASK`), but only if you set them up.
+3. Grant it for one task and revoke it when the task is done. Do not leave it in place.
+4. Turn on SQL Server Audit for the login so you know what was read.
+5. Tell the people whose data it is, if your policies or the law require it.
+
+Smallest grant (one table or schema, one database):
+
+```sql
+USE [YourDatabase];
+IF USER_ID(N'shadow-dba') IS NULL
+  CREATE USER [shadow-dba] FOR LOGIN [shadow-dba];
+GRANT SELECT ON dbo.Posts TO [shadow-dba];          -- one table
+-- GRANT SELECT ON SCHEMA::dbo TO [shadow-dba];     -- or one schema
+```
+
+Widest grant (every user table and view, in every database, now and in the future; SQL Server 2014+ and Managed Instance):
 
 ```sql
 USE [master];
-REVOKE SELECT ALL USER SECURABLES FROM [shadow-dba];
+GRANT SELECT ALL USER SECURABLES TO [shadow-dba];
 ```
 
-Job step commands in msdb (`sysjobsteps`) stay hidden either way: the script denies them because they can hold passwords.
+Azure SQL Database (one database, every table and view):
 
-### Optional grants
+```sql
+ALTER ROLE db_datareader ADD MEMBER [shadow-dba];
+```
 
-Not part of the setup script. Each one is still read-only. Grant it for one task and revoke it after.
+Revoke with the same statement and `REVOKE` instead of `GRANT` (`ALTER ROLE db_datareader DROP MEMBER` on Azure SQL Database). The login is still read-only with any of these grants: it cannot change a row. Job step commands in msdb (`sysjobsteps`) stay hidden; the setup script denies them because they can hold passwords.
+
+### Other optional grants
+
+Not part of the setup script. Each one is still read-only, but each one also exposes data, so the warnings above apply. Grant it for one task and revoke it after.
 
 | Grant | What it allows |
 |---|---|
-| `GRANT VIEW SERVER SECURITY AUDIT TO [shadow-dba];` (master, SQL Server 2022+ / Managed Instance) | Read SQL Server Audit files with `sys.fn_get_audit_file` and the audit specifications. On 2016-2019 this needs `CONTROL SERVER`, which is not read-only: do not grant it. |
-| In one database: `CREATE USER [shadow-dba] FOR LOGIN [shadow-dba]; GRANT SELECT ON SCHEMA::cdc TO [shadow-dba];` | Read Change Data Capture tables in that database (who changed which rows, and when). `SELECT ALL USER SECURABLES` does not cover them. |
+| `GRANT VIEW SERVER SECURITY AUDIT TO [shadow-dba];` (master, SQL Server 2022+ / Managed Instance) | Read SQL Server Audit files with `sys.fn_get_audit_file` and the audit specifications. Audit records contain the statements users ran, with literal values. On 2016-2019 this needs `CONTROL SERVER`, which is not read-only: do not grant it. |
+| In one database: `CREATE USER [shadow-dba] FOR LOGIN [shadow-dba]; GRANT SELECT ON SCHEMA::cdc TO [shadow-dba];` | Read Change Data Capture tables in that database (who changed which rows, and when). These tables hold copies of the changed rows. `SELECT ALL USER SECURABLES` does not cover them. |
 
 Revoke with the same statement and `REVOKE` instead of `GRANT`.
 
