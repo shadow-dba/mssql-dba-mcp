@@ -5,6 +5,13 @@ and the project uses [semantic versioning](https://semver.org/) (0.x: tool names
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-25
+
+### Fixed
+- Dates and times in tool output were shifted by the time zone of the computer running the
+  server (for example 08:56 on SQL Server shown as 10:56 in UTC+2). They now show exactly the
+  time SQL Server holds.
+
 ### Changed
 - Setup script no longer grants any access to rows in user tables: `SELECT ALL USER SECURABLES`
   (`db_datareader` on Azure SQL Database) is removed from the default scripts. The login is

@@ -7,16 +7,22 @@ describe('toMarkdownTable', () => {
     assert.equal(toMarkdownTable([]), '_No rows returned._');
   });
 
-  it('formats Date cells as compact local ISO (no timezone noise)', () => {
-    const d = new Date(2026, 5, 9, 8, 0, 1); // 2026-06-09 08:00:01 local
+  it('formats Date cells as the UTC wall-clock time the driver read from SQL Server', () => {
+    const d = new Date(Date.UTC(2026, 5, 9, 8, 0, 1)); // 2026-06-09 08:00:01 on the server
     const out = toMarkdownTable([{ When: d }]);
     assert.equal(out, '| When |\n| --- |\n| 2026-06-09 08:00:01 |');
   });
 
   it('zero-pads month, day, and time components', () => {
-    const d = new Date(2026, 0, 5, 3, 7, 9); // 2026-01-05 03:07:09 local
+    const d = new Date(Date.UTC(2026, 0, 5, 3, 7, 9)); // 2026-01-05 03:07:09 on the server
     const out = toMarkdownTable([{ When: d }]);
     assert.match(out, /\| 2026-01-05 03:07:09 \|$/);
+  });
+
+  it('does not shift times by the local time zone (late UTC hour, next day locally east of UTC)', () => {
+    const d = new Date(Date.UTC(2026, 11, 31, 23, 30, 0));
+    const out = toMarkdownTable([{ When: d }]);
+    assert.match(out, /\| 2026-12-31 23:30:00 \|$/);
   });
 
   it('renders null and undefined as empty cells', () => {

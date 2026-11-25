@@ -11,10 +11,13 @@ function formatCell(value: unknown): string {
   if (value === null || value === undefined) return '';
   let text: string;
   if (value instanceof Date) {
+    // The mssql driver (useUTC, the default) stores the server's wall-clock time as UTC,
+    // so read it back with the UTC getters. Local getters would shift it by this
+    // computer's time zone.
     text = Number.isNaN(value.getTime())
       ? String(value)
-      : `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}` +
-        ` ${pad2(value.getHours())}:${pad2(value.getMinutes())}:${pad2(value.getSeconds())}`;
+      : `${value.getUTCFullYear()}-${pad2(value.getUTCMonth() + 1)}-${pad2(value.getUTCDate())}` +
+        ` ${pad2(value.getUTCHours())}:${pad2(value.getUTCMinutes())}:${pad2(value.getUTCSeconds())}`;
   } else {
     text = String(value);
   }
